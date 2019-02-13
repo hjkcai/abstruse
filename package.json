@@ -37,7 +37,7 @@
     "test:protractor": "node ./tests/run_protractor.js",
     "preprotractor:ci": "npm run webdriver",
     "protractor:ci": "protractor ./protractor.conf.js",
-    "build-image": "IMAGE_NAME=bleenco/abstruse:${npm_package_version}-dev DOCKER_TAG=${npm_package_version}-dev SOURCE_COMMIT=`git rev-parse HEAD` hooks/build",
+    "build-image": "IMAGE_NAME=hjkcai/abstruse:${npm_package_version}-dev DOCKER_TAG=${npm_package_version}-dev SOURCE_COMMIT=`git rev-parse HEAD` hooks/build",
     "prebuild:prod": "npm run clean",
     "build:prod": "npm run build && npm run build:app",
     "prepublishOnly": "npm run build:prod",
