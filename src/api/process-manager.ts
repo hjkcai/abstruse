@@ -595,40 +595,33 @@ export async function stopBuild(buildId: number): Promise<any> {
   }
 }
 
-function queueJob(jobId: number): Promise<void> {
-  let job = null;
-  let requestData = null;
-
-  return dbJob.getJob(jobId)
-    .then(jobData => job = jobData)
-    .then(() => getBuild(job.builds_id))
-    .then(build => requestData = { branch: build.branch, pr: build.pr, data: build.data })
-    .then(() => {
-      let data = JSON.parse(job.data);
-      let jobProcess: JobProcess = {
-        build_id: job.builds_id,
-        job_id: jobId,
-        status: 'queued',
-        requestData: requestData,
-        commands: data.commands,
-        cache: data.cache || null,
-        repo_name: job.build.repository.full_name || null,
-        branch: job.build.branch || null,
-        env: data.env,
-        image_name: data.image,
-        exposed_ports: null,
-        log: '',
-        debug: false
-      };
-
-      jobProcesses.next(jobProcess);
-      jobEvents.next({
-        type: 'process',
-        build_id: job.builds_id,
-        job_id: job.id,
-        data: 'job queued'
-      });
-    });
+async function queueJob(jobId: number): Promise<void> {
+  const job = await dbJob.getJob(jobId);
+  const build = await getBuild(job.builds_id);
+  const requestData = { branch: build.branch, pr: build.pr, data: build.data };
+  let data = JSON.parse(job.data);
+  let jobProcess: JobProcess = {
+    build_id: job.builds_id,
+    job_id: jobId,
+    status: 'queued',
+    requestData: requestData,
+    commands: data.commands,
+    cache: data.cache || null,
+    repo_name: job.build.repository.full_name || null,
+    branch: job.build.branch || null,
+    env: data.env,
+    image_name: data.image,
+    exposed_ports: null,
+    log: '',
+    debug: false
+  };
+  jobProcesses.next(jobProcess);
+  jobEvents.next({
+    type: 'process',
+    build_id: job.builds_id,
+    job_id: job.id,
+    data: 'job queued'
+  });
 }
 
 function jobSucceded(proc: JobProcess): Promise<any> {
