@@ -122,8 +122,9 @@ function execJob(proc: JobProcess): Observable<any> {
 
 export function startJobProcess(proc: JobProcess): Observable<{}> {
   return new Observable(observer => {
-    getRepositoryByBuildId(proc.build_id)
-      .then(repository => {
+    (async () => {
+      try {
+        const repository = await getRepositoryByBuildId(proc.build_id);
         let envs = envVars.generate(proc);
         let secureVarirables = false;
         repository.variables.forEach(v => {
@@ -140,66 +141,62 @@ export function startJobProcess(proc: JobProcess): Observable<{}> {
         let jobTimeout = config.jobTimeout ? config.jobTimeout * 1000 : 3600000;
         let idleTimeout = config.idleTimeout ? config.idleTimeout * 1000 : 3600000;
 
-        buildSub[proc.job_id] =
-          startBuildProcess(proc, envs, jobTimeout, idleTimeout)
-            .subscribe(event => {
-              let msg: JobProcessEvent = {
-                build_id: proc.build_id,
-                job_id: proc.job_id,
-                type: event.type,
-                data: event.data
-              };
-
-              terminalEvents.next(msg);
-              if (event.data && event.type === 'data') {
-                proc.log += event.data;
-              } else if (event.data && event.type === 'exposed ports') {
-                proc.exposed_ports = event.data;
-              } else if (event.type === 'container') {
-                let ev: JobProcessEvent = {
-                  type: 'process',
-                  build_id: proc.build_id,
-                  job_id: proc.job_id,
-                  data: event.data
-                };
-                jobEvents.next(ev);
-              } else if (event.type === 'exit') {
-                proc.log += event.data;
-                observer.complete();
-              }
-            }, err => {
-              let msg: LogMessageType = {
-                message: typeof err === 'object' ? `[error]: ${JSON.stringify(err)}` : `[error]: ${err}`, type: 'error', notify: false
-              };
-              jobFailed(proc, msg)
-                .then(() => observer.complete());
-            }, () => {
-              jobSucceded(proc)
-                .then(() => observer.complete());
-            });
-      })
-      .then(() => dbJob.getLastRunId(proc.job_id))
-      .then(runId => {
-        let time = new Date();
-        let data = { id: runId, start_time: time, end_time: null, status: 'running', log: '' };
-        return dbJobRuns.updateJobRun(data)
-          .then(() => {
-            let jobRunData = {
-              type: 'process',
+        buildSub[proc.job_id] = startBuildProcess(proc, envs, jobTimeout, idleTimeout)
+          .subscribe(event => {
+            let msg: JobProcessEvent = {
               build_id: proc.build_id,
               job_id: proc.job_id,
-              data: 'job started',
-              additionalData: time.getTime()
+              type: event.type,
+              data: event.data
             };
-            jobEvents.next(jobRunData);
+            terminalEvents.next(msg);
+            if (event.data && event.type === 'data') {
+              proc.log += event.data;
+            } else if (event.data && event.type === 'exposed ports') {
+              proc.exposed_ports = event.data;
+            } else if (event.type === 'container') {
+              let ev: JobProcessEvent = {
+                type: 'process',
+                build_id: proc.build_id,
+                job_id: proc.job_id,
+                data: event.data
+              };
+              jobEvents.next(ev);
+            } else if (event.type === 'exit') {
+              proc.log += event.data;
+              observer.complete();
+            }
+          }, err => {
+            let msg_1: LogMessageType = {
+              message: typeof err === 'object' ? `[error]: ${JSON.stringify(err)}` : `[error]: ${err}`, type: 'error', notify: false
+            };
+            jobFailed(proc, msg_1)
+              .then(() => observer.complete());
+          }, () => {
+            jobSucceded(proc)
+              .then(() => observer.complete());
           });
-      })
-      .catch(err => {
-        let msg: LogMessageType = {
+
+        const runId = await dbJob.getLastRunId(proc.job_id);
+        let time = new Date();
+        let data = { id: runId, start_time: time, end_time: null, status: 'running', log: '' };
+        await dbJobRuns.updateJobRun(data);
+
+        let jobRunData = {
+          type: 'process',
+          build_id: proc.build_id,
+          job_id: proc.job_id,
+          data: 'job started',
+          additionalData: time.getTime()
+        };
+        jobEvents.next(jobRunData);
+      } catch (err) {
+        let msg_2: LogMessageType = {
           message: typeof err === 'object' ? `[error]: ${JSON.stringify(err)}` : `[error]: ${err}`, type: 'error', notify: false
         };
-        logger.next(msg);
-      });
+        logger.next(msg_2);
+      }
+    })();
   });
 }
 
