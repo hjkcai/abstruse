@@ -523,66 +523,62 @@ export async function startBuild(data: any, buildConfig?: any): Promise<any> {
   }
 }
 
-export function restartBuild(buildId: number): Promise<any> {
+export async function restartBuild(buildId: number): Promise<any> {
   let time = new Date();
   let buildData;
   let accessToken;
 
-  return stopBuild(buildId)
-    .then(() => getBuild(buildId))
-    .then(build => buildData = build)
-    .then(() => accessToken = buildData.repository.access_token || null)
-    .then(() => {
-      let jobs = buildData.jobs;
-      buildData.start_time = time;
-      buildData.end_time = null;
+  try {
+    await stopBuild(buildId);
+    const build = await getBuild(buildId);
+    buildData = build;
+    accessToken = buildData.repository.access_token || null;
+    let jobs = buildData.jobs;
+    buildData.start_time = time;
+    buildData.end_time = null;
 
-      return updateBuild(buildData)
-        .then(() => {
-          buildData.build_id = buildId;
-          return insertBuildRun(buildData);
-        })
-        .then(buildRun => {
-          return Promise.all(jobs.map(job => {
-            dbJobRuns.insertJobRun({
-              start_time: time,
-              end_time: null,
-              status: 'queued',
-              log: '',
-              build_run_id: buildRun.id,
-              job_id: job.id
-            });
-          }));
-        })
-        .then(() => {
-          return jobs.reduce((prev, curr) => {
-            return prev.then(() => {
-              return stopJob(curr.id).then(() => queueJob(curr.id));
-            });
-          }, Promise.resolve());
-        })
-        .then(() => getBuild(buildId))
-        .then(build => sendPendingStatus(build, build.id))
-        .then(() => {
-          jobEvents.next({
-            type: 'process',
-            build_id: buildId,
-            data: 'build restarted',
-            additionalData: time.getTime()
-          });
-        })
-        .catch(err => {
-          let msg: LogMessageType = {
-            message: typeof err === 'object' ? `[error]: ${JSON.stringify(err)}` : `[error]: ${err}`, type: 'error', notify: false
-          };
-          logger.next(msg);
+    try {
+      await updateBuild(buildData);
+      buildData.build_id = buildId;
+
+      const buildRun = await insertBuildRun(buildData);
+      await Promise.all(jobs.map(job => {
+        dbJobRuns.insertJobRun({
+          start_time: time,
+          end_time: null,
+          status: 'queued',
+          log: '',
+          build_run_id: buildRun.id,
+          job_id: job.id
         });
-    }).catch(err => {
+      }));
+
+      for (const curr of jobs) {
+        await stopJob(curr.id);
+        await queueJob(curr.id);
+      }
+
+      const build_1 = await getBuild(buildId);
+      await sendPendingStatus(build_1, build_1.id);
+
+      jobEvents.next({
+        type: 'process',
+        build_id: buildId,
+        data: 'build restarted',
+        additionalData: time.getTime()
+      });
+    } catch (err) {
       let msg: LogMessageType = {
         message: typeof err === 'object' ? `[error]: ${JSON.stringify(err)}` : `[error]: ${err}`, type: 'error', notify: false
       };
       logger.next(msg);
-    });
+    }
+  } catch (err_1) {
+    let msg_1: LogMessageType = {
+      message: typeof err_1 === 'object' ? `[error]: ${JSON.stringify(err_1)}` : `[error]: ${err_1}`, type: 'error', notify: false
+    };
+    logger.next(msg_1);
+  }
 }
 
 export function stopBuild(buildId: number): Promise<any> {
