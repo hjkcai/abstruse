@@ -25,7 +25,7 @@ COPY src /app/src
 
 RUN apk add --no-cache --virtual .build-dependencies make gcc g++ python curl sqlite git \
     && npm set progress=false && npm config set depth 0 \
-    && npm i \
+    && npm i && npm run build:prod \
     && apk del .build-dependencies
 
 
