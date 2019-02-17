@@ -26,7 +26,7 @@
   "scripts": {
     "clean": "rimraf dist",
     "ng": "ng",
-    "build": "webpack --config webpack.api.js",
+    "build": "tsc -p src/tsconfig.api.json",
     "dev": "tsc-watch -p src/tsconfig.api.json --onSuccess \"node ./dist/api/index.js\"",
     "start": "ng serve",
     "build:app": "ng build --prod --output-path dist/app",
