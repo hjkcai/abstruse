@@ -408,123 +408,119 @@ export function debugJob(jobId: number, debug: boolean): Promise<void> {
   });
 }
 
-export function startBuild(data: any, buildConfig?: any): Promise<any> {
-  let cfg: JobsAndEnv[];
-  let repoId = data.repositories_id;
-  let pr = null;
-  let sha = null;
-  let branch = null;
-  let buildData = null;
+export async function startBuild(data: any, buildConfig?: any): Promise<any> {
+  try {
+    let cfg: JobsAndEnv[];
+    let repoId = data.repositories_id;
+    let pr = null;
+    let sha = null;
+    let branch = null;
+    let buildData = null;
 
-  return getRepositoryOnly(data.repositories_id)
-    .then(repository => {
-      let isGithub = repository.github_id ? true : false;
-      let isBitbucket = repository.bitbucket_id ? true : false;
-      let isGitlab = repository.gitlab_id  ? true : false;
-      let isGogs = repository.gogs_id ? true : false;
+    const repository = await getRepositoryOnly(data.repositories_id);
+    let isGithub = repository.github_id ? true : false;
+    let isBitbucket = repository.bitbucket_id ? true : false;
+    let isGitlab = repository.gitlab_id  ? true : false;
+    let isGogs = repository.gogs_id ? true : false;
 
-      if (isGithub) {
-        if (data.data.pull_request) {
-          pr = data.data.pull_request.number;
-          sha = data.data.pull_request.head.sha;
-          branch = data.data.pull_request.base.ref;
-        } else {
-          sha = data.data.after || data.data.sha;
-          if (data.data && data.data.ref) {
-            branch = data.data.ref.replace('refs/heads/', '');
-          }
-        }
-      } else if (isBitbucket) {
-        if (data.data.push) {
-          let push = data.data.push.changes[data.data.push.changes.length - 1];
-          let commit = push.commits[push.commits.length - 1];
-          sha = commit.hash;
-          branch = push.new.type === 'branch' ? push.new.name : 'master';
-        } else if (data.data.pullrequest) {
-          pr = data.data.pullrequest.id;
-          sha = data.data.pullrequest.source.commit.hash;
-          branch = data.data.pullrequest.source.branch.name;
-        } else if (data.hash) {
-          sha = data.data.hash;
-        }
-      } else if (isGitlab) {
-        if (data.data.name) {
-          sha = data.data.commit.id;
-          branch = data.data.name;
-        }
-      }
-
-      branch = branch || repository.default_branch || 'master';
-
-      let repo = {
-        clone_url: repository.clone_url,
-        branch: branch,
-        pr: pr,
-        sha: sha,
-        access_token: repository.access_token || null,
-        type: repository.repository_provider
-      };
-
-      if (buildConfig) {
-        return Promise.resolve(buildConfig);
+    if (isGithub) {
+      if (data.data.pull_request) {
+        pr = data.data.pull_request.number;
+        sha = data.data.pull_request.head.sha;
+        branch = data.data.pull_request.base.ref;
       } else {
-        return getRemoteParsedConfig(repo);
+        sha = data.data.after || data.data.sha;
+        if (data.data && data.data.ref) {
+          branch = data.data.ref.replace('refs/heads/', '');
+        }
       }
-    })
-    .then(parsedConfig => cfg = parsedConfig)
-    .then(() => data.parsed_config = JSON.stringify(cfg))
-    .then(() => data = Object.assign(data, { branch: branch, pr: pr }))
-    .then(() => insertBuild(data))
-    .then(build => {
-      data = Object.assign(data, { build_id: build.id });
-      delete data.repositories_id;
-      delete data.pr;
-      delete data.parsed_config;
-      return insertBuildRun(data);
-    })
-    .then(() => getBuild(data.build_id))
-    .then(bdata => buildData = bdata)
-    .then(() => sendPendingStatus(buildData, buildData.id))
-    .then(() => {
-      return cfg.reduce((prev, c, i) => {
-        return prev.then(() => {
-          let dataJob = null;
+    } else if (isBitbucket) {
+      if (data.data.push) {
+        let push = data.data.push.changes[data.data.push.changes.length - 1];
+        let commit = push.commits[push.commits.length - 1];
+        sha = commit.hash;
+        branch = push.new.type === 'branch' ? push.new.name : 'master';
+      } else if (data.data.pullrequest) {
+        pr = data.data.pullrequest.id;
+        sha = data.data.pullrequest.source.commit.hash;
+        branch = data.data.pullrequest.source.branch.name;
+      } else if (data.hash) {
+        sha = data.data.hash;
+      }
+    } else if (isGitlab) {
+      if (data.data.name) {
+        sha = data.data.commit.id;
+        branch = data.data.name;
+      }
+    }
 
-          return dbJob.insertJob({ data: JSON.stringify(c), builds_id: data.build_id })
-            .then(job => dataJob = job)
-            .then(() => getLastRunId(data.build_id))
-            .then(lastRunId => {
-              const jobRun = {
-                start_time: new Date,
-                status: 'queued',
-                build_run_id: lastRunId,
-                job_id: dataJob.id
-              };
+    branch = branch || repository.default_branch || 'master';
 
-              return dbJobRuns.insertJobRun(jobRun);
-            })
-            .then(() => queueJob(dataJob.id));
-        });
-      }, Promise.resolve());
-    })
-    .then(lastBuild => {
-      jobEvents.next({
-        type: 'process',
-        build_id: data.build_id,
-        repository_id: repoId,
-        data: 'build added',
-        additionalData: null
-      });
-    })
-    .then(() => getDepracatedBuilds(buildData))
-    .then(builds => Promise.all(builds.map(build => stopBuild(build))))
-    .then(() => ({ buildId: buildData.id }))
-    .catch(err => {
-      let msg: LogMessageType = {
-        message: typeof err === 'object' ? `[error]: ${JSON.stringify(err)}` : `[error]: ${err}`, type: 'error', notify: false
-      };
-      logger.next(msg);
+    let repo = {
+      clone_url: repository.clone_url,
+      branch: branch,
+      pr: pr,
+      sha: sha,
+      access_token: repository.access_token || null,
+      type: repository.repository_provider
+    };
+
+    if (buildConfig) {
+      cfg = buildConfig;
+    } else {
+      cfg = await getRemoteParsedConfig(repo);
+    }
+
+    Object.assign(data, {
+      branch,
+      pr,
+      parsed_config: JSON.stringify(cfg)
     });
+
+    const build = await insertBuild(data);
+    data = Object.assign(data, { build_id: build.id });
+    delete data.repositories_id;
+    delete data.pr;
+    delete data.parsed_config;
+    await insertBuildRun(data);
+
+    buildData = await getBuild(data.build_id);
+    await sendPendingStatus(buildData, buildData.id);
+
+    for (const c of cfg) {
+      let dataJob = null;
+
+      const job = await dbJob.insertJob({ data: JSON.stringify(c), builds_id: data.build_id });
+      dataJob = job;
+      const lastRunId = await getLastRunId(data.build_id);
+      const jobRun = {
+        start_time: new Date,
+        status: 'queued',
+        build_run_id: lastRunId,
+        job_id: dataJob.id
+      };
+      await dbJobRuns.insertJobRun(jobRun);
+      await queueJob(dataJob.id);
+    }
+
+    jobEvents.next({
+      type: 'process',
+      build_id: data.build_id,
+      repository_id: repoId,
+      data: 'build added',
+      additionalData: null
+    });
+
+    const deprcatedBuilds = await getDepracatedBuilds(buildData);
+    await Promise.all(deprcatedBuilds.map(x => stopBuild(x)));
+
+    return { buildId: buildData.id };
+  } catch (err) {
+    let msg: LogMessageType = {
+      message: typeof err === 'object' ? `[error]: ${JSON.stringify(err)}` : `[error]: ${err}`, type: 'error', notify: false
+    };
+    logger.next(msg);
+  }
 }
 
 export function restartBuild(buildId: number): Promise<any> {
