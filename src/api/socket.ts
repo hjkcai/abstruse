@@ -28,6 +28,8 @@ import { ICpuData, cpu } from './stats/cpu';
 import { decodeJwt } from './security';
 import { getLastBuild } from './db/build';
 
+const debug = require('debug')('abstruse');
+
 export interface ISocketServerOptions {
   app: express.Application;
 }
@@ -166,6 +168,8 @@ export class SocketServer {
   }
 
   private handleEvent(event: any, client: Client): void {
+    debug(event);
+
     switch (event.type) {
       case 'login': {
         let token = event.data;
