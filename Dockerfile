@@ -66,6 +66,7 @@ HEALTHCHECK --interval=10s --timeout=2s --start-period=20s \
     CMD wget -q -O- http://localhost:6500/status || exit 1
 
 EXPOSE 6500
+EXPOSE 9999
 
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD [ "node", "dist/api/index.js" ]
+CMD [ "node", "--inspect=0.0.0.0:9999", "dist/api/index.js" ]
