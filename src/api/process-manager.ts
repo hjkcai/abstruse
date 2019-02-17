@@ -200,9 +200,8 @@ export function startJobProcess(proc: JobProcess): Observable<{}> {
   });
 }
 
-export function restartJob(jobId: number): Promise<void> {
+export async function restartJob(jobId: number): Promise<void> {
   let time = new Date();
-  let job = null;
   let process = processes.find(p => p.job_id === Number(jobId));
   if (process && process.debug) {
     process.debug = false;
@@ -222,38 +221,37 @@ export function restartJob(jobId: number): Promise<void> {
     });
   }
 
-  return stopJob(jobId)
-    .then(() => dbJob.getLastRun(jobId))
-    .then(lastRun => dbJobRuns.insertJobRun({
+  try {
+    await stopJob(jobId);
+    const lastRun = await dbJob.getLastRun(jobId);
+    await dbJobRuns.insertJobRun({
       start_time: time,
       end_time: null,
       status: 'queued',
       log: '',
       build_run_id: lastRun.build_run_id,
       job_id: jobId
-    }))
-    .then(() => queueJob(jobId))
-    .then(() => dbJob.getJob(jobId))
-    .then(j => job = j)
-    .then(() => {
-      jobEvents.next({
-        type: 'process',
-        build_id: job.builds_id,
-        job_id: job.id,
-        data: 'job restarted',
-        additionalData: time.getTime()
-      });
-    })
-    .then(() => getBuild(job.builds_id))
-    .then(build => sendPendingStatus(build, build.id))
-    .catch(err => {
-      let msg: LogMessageType = {
-        message: typeof err === 'object' ? `[error]: ${JSON.stringify(err)}` : `[error]: ${err}`, type: 'error', notify: false
-      };
-      logger.next(msg);
     });
-}
 
+    await queueJob(jobId);
+    const job = await dbJob.getJob(jobId);
+
+    jobEvents.next({
+      type: 'process',
+      build_id: job.builds_id,
+      job_id: job.id,
+      data: 'job restarted',
+      additionalData: time.getTime()
+    });
+    const build = await getBuild(job.builds_id);
+    return await sendPendingStatus(build, build.id);
+  } catch (err) {
+    let msg: LogMessageType = {
+      message: typeof err === 'object' ? `[error]: ${JSON.stringify(err)}` : `[error]: ${err}`, type: 'error', notify: false
+    };
+    logger.next(msg);
+  }
+}
 
 export function stopJob(jobId: number): Promise<void> {
   let time = new Date();
