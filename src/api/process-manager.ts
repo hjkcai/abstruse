@@ -581,19 +581,18 @@ export async function restartBuild(buildId: number): Promise<any> {
   }
 }
 
-export function stopBuild(buildId: number): Promise<any> {
-  return getBuild(buildId)
-    .then(build => {
-      return build.jobs.reduce((prev, current) => {
-        return prev.then(() => stopJob(current.id));
-      }, Promise.resolve());
-    })
-    .catch(err => {
-      let msg: LogMessageType = {
-        message: typeof err === 'object' ? `[error]: ${JSON.stringify(err)}` : `[error]: ${err}`, type: 'error', notify: false
-      };
-      logger.next(msg);
-    });
+export async function stopBuild(buildId: number): Promise<any> {
+  try {
+    const build = await getBuild(buildId);
+    for (const current of build.jobs) {
+      await stopJob(current.id);
+    }
+  } catch (err) {
+    let msg: LogMessageType = {
+      message: typeof err === 'object' ? `[error]: ${JSON.stringify(err)}` : `[error]: ${err}`, type: 'error', notify: false
+    };
+    logger.next(msg);
+  }
 }
 
 function queueJob(jobId: number): Promise<void> {
