@@ -68,5 +68,6 @@ HEALTHCHECK --interval=10s --timeout=2s --start-period=20s \
 EXPOSE 6500
 EXPOSE 9999
 
+ENV DEBUG=knex:query,abstruse
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD [ "node", "--inspect=0.0.0.0:9999", "dist/api/index.js" ]
