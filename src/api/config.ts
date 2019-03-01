@@ -147,6 +147,10 @@ export function parseConfig(data: any): Config {
   let main = parseJob(data);
   main.matrix = parseMatrix(data.matrix || null);
 
+  if (Array.isArray(data.jobs)) {
+    data.jobs = { include: data.jobs };
+  }
+
   if (data.jobs) {
     main.jobs.include = data.jobs.include ? data.jobs.include.map(job => parseJob(job)) : [];
     main.jobs.exclude = data.jobs.exclude ? data.jobs.exclude.map(job => parseJob(job)) : [];
