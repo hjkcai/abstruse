@@ -13,7 +13,7 @@
 
 ### Live Demo
 
-[https://ci.bleenco.io](https://ci.bleenco.io)
+[https://ci.bleenco.io](https://ci.bleenco.io).
 
 ### Quick Start (Video)
 
